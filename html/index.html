@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>xr消息同步助手</title>
+    <style>
+        body {
+            font-family: "Microsoft YaHei", Arial, sans-serif;          
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        #connectionStatus {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+            width: 100px;
+        }
+        button:hover {
+            background-color: #0056b3;
+            cursor: hand;
+        }
+        textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            resize: vertical;
+            margin: 10px;
+        }
+        #messages {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            resize: vertical;
+            margin: 10px;
+            min-height: 50px;
+        }
+        .info {
+            margin: 10px;
+            font-size: 12px;
+            color: #fff;
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-color: #007bff;
+            padding: 10px;
+            margin:0;
+            box-sizing: border-box;
+            border-radius: 4px;
+            width: 100%;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="info"></div>
+        <!-- wesocket连接状态 -->
+        <div id="connectionStatus">WebSocket 连接状态：</div>
+        <div class="row">
+            <div id="messages">等待消息...</div>
+            <!-- 复制按钮 -->
+            <button onclick="copyMessages()">复制</button>
+        </div>
+        <div class="row">
+            <textarea type="text" id="messageInput" placeholder="输入消息"></textarea>
+            <button onclick="sendMessage()">发送</button>
+        </div>
+    </div>
+
+    <script>
+        // 建立 WebSocket 连接
+        let address = `wss://${location.host}/ws`;
+        var ws = new WebSocket(address);
+
+        ws.onopen = function() {
+            console.log("WebSocket 连接已建立");
+            document.getElementById("connectionStatus").textContent = "WebSocket 连接已建立";
+            showInfo("WebSocket 连接已建立");
+        };
+
+        ws.onclose = function() {
+            console.log("WebSocket 连接已关闭");
+            document.getElementById("connectionStatus").textContent = "WebSocket 连接已关闭";
+            showInfo("WebSocket 连接已关闭");
+        }
+
+        ws.onerror = function(error) {
+            console.error("WebSocket 连接出错：", error);
+            document.getElementById("connectionStatus").textContent = "WebSocket 连接出错";
+            showInfo("WebSocket 连接出错");
+        };
+
+        ws.onmessage = function(event) {
+            var messagesDiv = document.getElementById("messages");
+            // var message = document.createElement("p");
+            // message.textContent = event.data;
+            // messagesDiv.appendChild(message);
+            messagesDiv.textContent = event.data;
+        };
+
+        function sendMessage() {
+            var input = document.getElementById("messageInput");
+            var message = input.value;
+            ws.send(message);
+            input.value = "";
+            showInfo("发送成功");
+        }
+        async function copyMessages() {
+            var messagesDiv = document.getElementById("messages");
+            try {
+                await navigator.clipboard.writeText(messagesDiv.textContent);
+                console.log("消息已复制到剪贴板");
+                showInfo("复制成功");
+            } catch (err) {
+                console.error("复制到剪贴板失败：", err);
+                showInfo("复制失败");
+            }
+        }
+        // 显示info
+        function showInfo(msg) {
+            var info = document.querySelector(".info");
+            info.textContent = msg;
+            info.style.display = "block";
+            setTimeout(function() {
+                info.style.display = "none";
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
