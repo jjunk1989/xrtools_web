@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
@@ -60,6 +61,15 @@ func handleMessages() {
 }
 
 func main() {
+	// 默认端口号
+	port := 443
+
+	// 解析命令行参数
+	flag.IntVar(&port, "port", port, "Port number to listen on")
+	flag.Parse()
+
+	flag.Usage()
+
 	// 加载SSL证书和私钥
 	certFile := "cert.pem"
 	keyFile := "key.pem"
@@ -86,14 +96,16 @@ func main() {
 				if ipnet.IP.To4() != nil {
 					fmt.Println("Local IP address:", ipnet.IP.String())
 					// 访问的URL
-					fmt.Println("Access URL:", "https://"+ipnet.IP.String()+":443")
+					fmt.Printf("Access URL: https://%s:%d", ipnet.IP.String(), port)
 				}
 			}
 		}
 	}
 
 	// 创建HTTPS服务器
-	err = http.ListenAndServeTLS(":443", certFile, keyFile, nil)
+	// 创建HTTPS服务器并监听指定端口
+	addr := fmt.Sprintf(":%d", port)
+	err = http.ListenAndServeTLS(addr, certFile, keyFile, nil)
 	if err != nil {
 		fmt.Println("Error starting HTTPS server:", err)
 	}
