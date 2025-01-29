@@ -91,6 +91,12 @@
             <textarea type="text" id="messageInput" placeholder="输入消息"></textarea>
             <button onclick="sendMessage()">发送</button>
         </div>
+        <div class="row">
+            <form id="uploadForm" enctype="multipart/form-data">
+                <input type="file" id="fileInput" name="file">
+                <button type="button" onclick="uploadFile()">上传文件</button>
+            </form>
+        </div>
     </div>
 
     <script>
@@ -150,6 +156,25 @@
             setTimeout(function() {
                 info.style.display = "none";
             }, 3000);
+        }
+
+        function uploadFile() {
+            var form = document.getElementById('uploadForm');
+            var formData = new FormData(form);
+
+            fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(data => {
+                console.log('File uploaded successfully:', data);
+                showInfo('文件上传成功');
+            })
+            .catch(error => {
+                console.error('Error uploading file:', error);
+                showInfo('文件上传失败');
+            });
         }
     </script>
 </body>
