@@ -2,3 +2,7 @@ xrtools_web.exe
 .vscode/launch.json
 cert.pem
 key.pem
+/uploads/*
+!/uploads/upload
+/videos/*
+!/videos/videos
