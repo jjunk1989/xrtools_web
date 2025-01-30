@@ -109,6 +109,10 @@ func main() {
 	fs := http.FileServer(http.Dir("html"))
 	http.Handle("/", http.StripPrefix("/", fs))
 
+	// 视频文件服务
+	video_fs := http.FileServer(http.Dir("videos"))
+	http.Handle("/videos/", http.StripPrefix("/videos/", video_fs))
+
 	// websocket服务
 	http.Handle("/ws", websocket.Handler(wsHandler))
 
