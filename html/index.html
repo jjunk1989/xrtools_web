@@ -75,6 +75,30 @@
             width: 100%;
             display: none;
         }
+        .upload-btn-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .btn {
+            border: 2px solid #4CAF50;
+            color: white;
+            background-color: #4CAF50;
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .upload-btn-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+        }
     </style>
 </head>
 <body>
@@ -92,8 +116,11 @@
             <button onclick="sendMessage()">发送</button>
         </div>
         <div class="row">
-            <form id="uploadForm" enctype="multipart/form-data">
-                <input type="file" id="fileInput" name="file">
+            <form class="row" id="uploadForm" enctype="multipart/form-data">
+                <div class="upload-btn-wrapper">
+                    <button type="button">选择文件</button>
+                    <input type="file" id="fileInput" name="file">
+                </div>
                 <button type="button" onclick="uploadFile()">上传文件</button>
             </form>
         </div>
