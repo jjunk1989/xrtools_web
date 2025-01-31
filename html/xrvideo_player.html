@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
+    <meta name='mobile-web-app-capable' content='yes'>
+    <meta name='apple-mobile-web-app-capable' content='yes'>
+    <title>WebXR 视频播放器</title>
+    <script src="js/webxr-layers-polyfill.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            text-align: center;
+        }
+
+        video {
+            width: 80%;
+            max-width: 800px;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <header style="max-width: 800px;">
+        <details open>
+        <summary>Media layer samples</summary>
+        <p>
+          This sample shows various video resolutions displayed using WebXR Media Layers. On browsers that don't support layers, the <a href="https://github.com/immersive-web/webxr-layers-polyfill">WebXR Layers polyfill</a> will be used.
+          <a class="back" href="./">Back</a>
+        </p>
+        <label>Choose a video</label>
+        <select id="videoselect">
+        </select>
+          <button id="xr-button" disabled>XR not found</button>
+        </details>
+      </header>
+      <main style='text-align: center;'>
+      </main>
+
+    <script>
+        (function () {
+            'use strict';
+
+            // initialize the polyfill for unsupported devices
+            let layersPolyfill = new WebXRLayersPolyfill()
+
+            // XR globals.
+            let xrButton = document.getElementById('xr-button');
+            let xrSession = null;
+            let xrRefSpace = null;
+            let xrMediaFactory = null;
+            let cylinder_layer = false;
+
+            let video = document.createElement('video');
+            video.loop = false;
+            video.crossOrigin = "anonymous";
+            video.preload = 'auto';
+            video.autoload = true;
+            function buttonPressedThisFrame(gamepad, index) {
+                return (index < gamepad.buttons.length &&
+                    gamepad.buttons[index].pressed);
+            }
+            function videoSelect() {
+                let s = document.getElementById("videoselect");
+                video.src = s.options[s.selectedIndex].value;
+                xrButton.textContent = 'Loading video';
+                xrButton.disabled = true;
+            }
+
+            video.oncanplaythrough = (event) => {
+                xrButton.disabled = false;
+                xrButton.textContent = 'Enter XR';
+            }
+
+            video.onerror = (event) => {
+                xrButton.disabled = true;
+                xrButton.textContent = 'Can\'t play video' + video.error.message;
+            };
+
+            // 获取视频文件列表并设置到 select 组件中
+            fetch('/api/videos')
+            .then(response => response.json())
+            .then(data => {
+                if (data.code === 200) {
+                    data.list.forEach(videoFile => {
+                        let s = document.getElementById("videoselect");
+                        const option = document.createElement('option');
+                        option.value = `/videos/${videoFile}`;
+                        option.textContent = videoFile;
+                        s.appendChild(option);
+                    });
+                    videoSelect();
+                } else {
+                    console.error('Error fetching video list:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching video list:', error);
+            });
+
+            document.getElementById("videoselect").addEventListener('change', (event) => {
+                videoSelect();
+            });
+
+            // Checks to see if WebXR is available and, if so, requests an XRDevice
+            // that is connected to the system and tests it to ensure it supports the
+            // desired session options.
+            function initXR() {
+                // Is WebXR available on this UA?
+                if (navigator.xr) {
+                    // If the device allows creation of exclusive sessions set it as the
+                    // target of the 'Enter XR' button.
+                    navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+                        if (supported) {
+                            // Updates the button to start an XR session when clicked.
+                            xrButton.addEventListener('click', onButtonClicked);
+                            xrButton.disabled = video.readyState > 2;
+                        }
+                    });
+                }
+            }
+
+            // Called when the user clicks the button to enter XR. If we don't have a
+            // session we'll request one, and if we do have a session we'll end it.
+            function onButtonClicked() {
+                if (!xrSession) {
+                    navigator.xr.requestSession('immersive-vr', { requiredFeatures: ['layers'] }).then(onSessionStarted);
+                    video.play();
+                } else {
+                    xrSession.end();
+                }
+            }
+
+            // Called when we've successfully acquired a XRSession. In response we
+            // will set up the necessary session state and kick off the frame loop.
+            function onSessionStarted(session) {
+                xrSession = session;
+                xrButton.textContent = 'Exit VR';
+
+                // Listen for the sessions 'end' event so we can respond if the user
+                // or UA ends the session for any reason.
+                session.addEventListener('end', onSessionEnded);
+
+                xrMediaFactory = new XRMediaBinding(session);
+
+                session.requestReferenceSpace('local').then((refSpace) => {
+                    xrRefSpace = refSpace;
+
+                    let angle = Math.PI;
+                    if (!video.src.includes("180"))
+                        angle = Math.PI * 2;
+
+                    let layout = "stereo-top-bottom";
+                    if (video.src.includes("sbs") || video.src.includes("SBS"))
+                        layout = "stereo-left-right";
+
+                    let layer = xrMediaFactory.createEquirectLayer(video, { space: refSpace, centralHorizontalAngle: angle, layout: layout });
+                    // let layer = xrMediaFactory.createEquirectLayer(video, {space: refSpace});
+                    session.updateRenderState({ layers: [layer] });
+
+                    // Inform the session that we're ready to begin drawing.
+                    session.requestAnimationFrame(onXRFrame);
+                });
+            }
+
+            // Called either when the user has explicitly ended the session by calling
+            // session.end() or when the UA has ended the session for any reason.
+            // At this point the session object is no longer usable and should be
+            // discarded.
+            function onSessionEnded(event) {
+                xrSession = null;
+                xrButton.textContent = 'Enter VR';
+                video.pause();
+            }
+
+            // Called every time the XRSession requests that a new frame be drawn.
+            function onXRFrame(time, frame) {
+                let session = frame.session;
+
+                // Inform the session that we're ready for the next frame.
+                session.requestAnimationFrame(onXRFrame);
+
+                let force_mono = false;
+                for (let source of session.inputSources) {
+                    if (source.gamepad) {
+                        // Toggle Play/Pause on primary button press
+                        if (buttonPressedThisFrame(source.gamepad, 0)) {
+                            video.currentTime = 0;
+                            video.play();
+                        } else if (buttonPressedThisFrame(source.gamepad, 1)) {
+                            if (video.paused)
+                                video.play();
+                            else
+                                video.pause();
+                        }
+                        force_mono |= buttonPressedThisFrame(source.gamepad, 4);
+                    }
+                }
+                xrSession.renderState.layers[0].forceMonoPresentation = force_mono;
+            }
+
+            // Start the XR application.
+            initXR();
+
+        })();
+    </script>
+</body>
+
+</html>

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -91,6 +92,34 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "File uploaded successfully: %s", header.Filename)
 }
 
+func listVideosHandler(w http.ResponseWriter, r *http.Request) {
+	files, err := os.ReadDir("videos")
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"code":    http.StatusInternalServerError,
+			"message": "Error reading videos directory",
+			"list":    nil,
+		})
+		return
+	}
+
+	var videoFiles []string
+	for _, file := range files {
+		if !file.IsDir() {
+			videoFiles = append(videoFiles, file.Name())
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"code":    http.StatusOK,
+		"message": "Success",
+		"list":    videoFiles,
+	})
+}
+
 func main() {
 	// 默认端口号
 	port := 443
@@ -121,6 +150,9 @@ func main() {
 
 	// 文件上传服务
 	http.HandleFunc("/api/upload", uploadHandler)
+
+	// 列出视频文件服务
+	http.HandleFunc("/api/videos", listVideosHandler)
 
 	// 启动处理广播消息的协程
 	go handleMessages()
