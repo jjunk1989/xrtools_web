@@ -7,113 +7,192 @@
     <meta name='mobile-web-app-capable' content='yes'>
     <meta name='apple-mobile-web-app-capable' content='yes'>
     <title>WebXR 视频播放器</title>
-    <script src="js/webxr-layers-polyfill.js"></script>
+    <link rel="stylesheet" href="css/common.css">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f4f4f4;
-        }
-
-        .container {
-            text-align: center;
-        }
-
-        video {
-            width: 80%;
-            max-width: 800px;
-            border: 2px solid #4CAF50;
-            border-radius: 8px;
+        .title {
+            color: #000;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none; 
         }
     </style>
+    <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
 </head>
 
 <body>
-    <header style="max-width: 800px;">
-        <details open>
-        <summary>Media layer samples</summary>
-        <p>
-          This sample shows various video resolutions displayed using WebXR Media Layers. On browsers that don't support layers, the <a href="https://github.com/immersive-web/webxr-layers-polyfill">WebXR Layers polyfill</a> will be used.
-          <a class="back" href="./">Back</a>
-        </p>
-        <label>Choose a video</label>
-        <select id="videoselect">
-        </select>
-          <button id="xr-button" disabled>XR not found</button>
-        </details>
+    <header class="container">
+        <div class="info"></div>
+        <div class="row">
+            <h1>360 Videos</h1>
+        </div>
+        <div>
+            <!-- 添加两个checkbox -->
+            <input type="checkbox" id="angleCheckbox" checked="true" /> <label for="">设置为 180°</label>
+            <input type="checkbox" id="layoutCheckbox" checked="true" /> <label for=""> 设置为左右布局</label>
+        </div>
+        <div id="video-list">
+        </div>
+        <div id="container" style="position: absolute; left: -9999px; top: -9999px;"></div>
       </header>
       <main style='text-align: center;'>
       </main>
 
-    <script>
+
+      <script type="importmap">
+            {
+                "imports": {
+                    "three": "./js/three.module.js"
+                }
+            }
+      </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
         (function () {
             'use strict';
-
-            // initialize the polyfill for unsupported devices
-            let layersPolyfill = new WebXRLayersPolyfill()
+            
+            var vConsole = new window.VConsole();
 
             // XR globals.
-            let xrButton = document.getElementById('xr-button');
             let xrSession = null;
             let xrRefSpace = null;
             let xrMediaFactory = null;
+            let layer = null;
             let cylinder_layer = false;
+            let list = [];
+            let currentPlayIndex = 0;
+            let videoLoaded = false;
+            // three render
+            let camera = null;
+            let scene = null;
+            let renderer = null;
+            let materialLeft = null;
+            let materialRight = null;
+            let meshLeft = null;
+            let meshRight = null;
 
             let video = document.createElement('video');
             video.loop = false;
             video.crossOrigin = "anonymous";
             video.preload = 'auto';
             video.autoload = true;
-            function buttonPressedThisFrame(gamepad, index) {
-                return (index < gamepad.buttons.length &&
-                    gamepad.buttons[index].pressed);
+
+            let lastGamepadMap = new Map();
+
+
+            function deepCopyButtons(arr) {
+                let res = [];
+                for (let i = 0; i < arr.length; i++) {
+                    res.push({
+                        pressed: arr[i].pressed,
+                        touched: arr[i].touched,
+                        value: arr[i].value
+                    });
+                }
+                return res;
             }
-            function videoSelect() {
-                let s = document.getElementById("videoselect");
-                video.src = s.options[s.selectedIndex].value;
-                xrButton.textContent = 'Loading video';
-                xrButton.disabled = true;
+
+            function buttonReleaseThisFrame(source, gamepad, index) {
+                if (!lastGamepadMap.has(source)) {
+                    console.log(gamepad.buttons, source);
+                    lastGamepadMap.set(source, deepCopyButtons(gamepad.buttons));
+                    return false;
+                }
+
+                let lastGamepad = lastGamepadMap.get(source);
+
+                let res = buttonPressedThisFrame(lastGamepad, index) && !buttonPressedThisFrame(gamepad.buttons, index);
+                lastGamepad = deepCopyButtons(gamepad.buttons);
+                lastGamepadMap.set(source, lastGamepad);
+
+                return res;
+            }
+
+            function buttonPressedThisFrame(gamepad, index) {
+                return (index < gamepad.length &&
+                    gamepad[index].pressed);
+            }
+
+            video.onloadeddata = (event) => {
+                showInfo('Video loaded data.');
+                console.log("video onloadeddata");
+                videoLoaded = true;
+            }
+
+            video.onplay = (event) => {
+                showInfo('Video onplay.');
+                console.log("video onplay");
+                videoLoaded = true;           
             }
 
             video.oncanplaythrough = (event) => {
-                xrButton.disabled = false;
-                xrButton.textContent = 'Enter XR';
+                showInfo('Video loaded successfully.');
+                videoLoaded = true;   
+                console.log("video oncanplaythrough");
             }
 
             video.onerror = (event) => {
-                xrButton.disabled = true;
-                xrButton.textContent = 'Can\'t play video' + video.error.message;
+                console.error('Error loading video:', event);
+                showInfo('Error loading video.');
+                // videoLoaded = false;
             };
+
+            // 显示info
+            function showInfo(msg) {
+                var info = document.querySelector(".info");
+                info.textContent = msg;
+                info.style.display = "block";
+                setTimeout(function() {
+                    info.style.display = "none";
+                }, 3000);
+            }
+
+            function playVideo(src) {
+                videoLoaded = false;
+                video.src = src;
+                onButtonClicked();
+            }
 
             // 获取视频文件列表并设置到 select 组件中
             fetch('/api/videos')
-            .then(response => response.json())
-            .then(data => {
-                if (data.code === 200) {
-                    data.list.forEach(videoFile => {
-                        let s = document.getElementById("videoselect");
-                        const option = document.createElement('option');
-                        option.value = `/videos/${videoFile}`;
-                        option.textContent = videoFile;
-                        s.appendChild(option);
-                    });
-                    videoSelect();
-                } else {
-                    console.error('Error fetching video list:', data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching video list:', error);
-            });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 200) {
+                        const videoList = document.getElementById('video-list');
+                        let listHtml = '';
+                        data.list.forEach((videoFile, index) => {
+                            if (videoFile == "videos/info.txt") {
+                                return;
+                            }
+                            listHtml += `
+                                <div class="row">
+                                    <div>
+                                        <p class="title">${videoFile}</p>
+                                        <!-- <video src="${videoFile}" controls="controls" width="500" height="auto"></video> -->
+                                    </div>
+                                    <button type="button" class="btn-enterxr" data-src="${videoFile}" data-index="${index}">EnterXR</button>
+                                </div>
+                            `;
+                            list.push(videoFile);
+                        });
+                        videoList.innerHTML = listHtml;
+                        let buttons = document.getElementsByClassName("btn-enterxr");
+                        
+                        for(let i = 0; i < buttons.length; i++) {
+                            buttons[i].addEventListener("click", function(e) {
+                                let src = e.target.getAttribute("data-src");
 
-            document.getElementById("videoselect").addEventListener('change', (event) => {
-                videoSelect();
-            });
+                                playVideo(src);
+                            });
+                        }
+                    } else {
+                        console.error('Error fetching video list:', data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching video list:', error);
+                });
 
             // Checks to see if WebXR is available and, if so, requests an XRDevice
             // that is connected to the system and tests it to ensure it supports the
@@ -126,8 +205,9 @@
                     navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
                         if (supported) {
                             // Updates the button to start an XR session when clicked.
-                            xrButton.addEventListener('click', onButtonClicked);
-                            xrButton.disabled = video.readyState > 2;
+                            showInfo('Support XR.');
+                        } else {
+                            showInfo('Not support XR.');
                         }
                     });
                 }
@@ -137,7 +217,15 @@
             // session we'll request one, and if we do have a session we'll end it.
             function onButtonClicked() {
                 if (!xrSession) {
-                    navigator.xr.requestSession('immersive-vr', { requiredFeatures: ['layers'] }).then(onSessionStarted);
+                    //video.onplay = (event) => {
+                        showInfo('Video loaded successfully.');
+                        navigator.xr.requestSession('immersive-vr', { requiredFeatures: [
+                        ], optionalFeatures: [
+                            'layers',
+                            'local-floor',
+                            'bounded-floor',
+                        ]}).then(onSessionStarted);
+                    //}
                     video.play();
                 } else {
                     xrSession.end();
@@ -147,33 +235,26 @@
             // Called when we've successfully acquired a XRSession. In response we
             // will set up the necessary session state and kick off the frame loop.
             function onSessionStarted(session) {
+                showInfo('Entering XR...');
+
                 xrSession = session;
-                xrButton.textContent = 'Exit VR';
+
+                session.addEventListener('selectend', () => {
+                    console.log('selectend');
+                    nextVideo();
+                });
+
+                session.addEventListener('squeezeend', () => {
+                    console.log("squeezeend");
+                });
 
                 // Listen for the sessions 'end' event so we can respond if the user
                 // or UA ends the session for any reason.
                 session.addEventListener('end', onSessionEnded);
 
-                xrMediaFactory = new XRMediaBinding(session);
+                initRender(xrSession);
 
-                session.requestReferenceSpace('local').then((refSpace) => {
-                    xrRefSpace = refSpace;
-
-                    let angle = Math.PI;
-                    if (!video.src.includes("180"))
-                        angle = Math.PI * 2;
-
-                    let layout = "stereo-top-bottom";
-                    if (video.src.includes("sbs") || video.src.includes("SBS"))
-                        layout = "stereo-left-right";
-
-                    let layer = xrMediaFactory.createEquirectLayer(video, { space: refSpace, centralHorizontalAngle: angle, layout: layout });
-                    // let layer = xrMediaFactory.createEquirectLayer(video, {space: refSpace});
-                    session.updateRenderState({ layers: [layer] });
-
-                    // Inform the session that we're ready to begin drawing.
-                    session.requestAnimationFrame(onXRFrame);
-                });
+                showInfo('XR session started.');
             }
 
             // Called either when the user has explicitly ended the session by calling
@@ -182,34 +263,177 @@
             // discarded.
             function onSessionEnded(event) {
                 xrSession = null;
-                xrButton.textContent = 'Enter VR';
+                layer = null;
+                meshLeft = null; 
+                meshRight = null;
                 video.pause();
+                videoLoaded = false;
             }
 
-            // Called every time the XRSession requests that a new frame be drawn.
-            function onXRFrame(time, frame) {
-                let session = frame.session;
+            async function initRender(session) {
 
-                // Inform the session that we're ready for the next frame.
-                session.requestAnimationFrame(onXRFrame);
+                const container = document.getElementById( 'container' );
 
-                let force_mono = false;
-                for (let source of session.inputSources) {
-                    if (source.gamepad) {
-                        // Toggle Play/Pause on primary button press
-                        if (buttonPressedThisFrame(source.gamepad, 0)) {
-                            video.currentTime = 0;
-                            video.play();
-                        } else if (buttonPressedThisFrame(source.gamepad, 1)) {
-                            if (video.paused)
-                                video.play();
-                            else
-                                video.pause();
-                        }
-                        force_mono |= buttonPressedThisFrame(source.gamepad, 4);
+                camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 1, 2000 );
+                camera.layers.enable( 1 ); // render left view when no stereo available
+
+                //
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color( 0x000000 );
+
+                if (false) {
+                    // left
+
+                    const geometry1 = new THREE.BoxGeometry( 1, 1, 1 ); 
+
+                    const uvs1 = geometry1.attributes.uv.array;
+
+                    for ( let i = 0; i < uvs1.length; i += 2 ) {
+
+                        uvs1[ i ] *= 0.5;
+
                     }
+
+                    const material1 = new THREE.MeshBasicMaterial( {color: 0x00ff00} ); 
+                    const cube1 = new THREE.Mesh( geometry1, material1 ); 
+
+                    cube1.rotation.y = - Math.PI / 2;
+                    cube1.position.z = -3;
+                    cube1.layers.set( 1 ); // display in left eye only
+                    scene.add( cube1 );
+
+                    // right
+
+                    const geometry2 = new THREE.BoxGeometry( 1, 1, 1 ); 
+
+                    const uvs2 = geometry2.attributes.uv.array;
+
+                    for ( let i = 0; i < uvs2.length; i += 2 ) {
+
+                        uvs2[ i ] *= 0.5;
+                        uvs2[ i ] += 0.5;
+
+                    }
+
+                    const material2 = new THREE.MeshBasicMaterial( {color: 0x00ff00} ); 
+
+                    const cube2= new THREE.Mesh( geometry2, material2 );
+                    cube2.position.z = -3;
+                    cube2.rotation.y = - Math.PI / 2;
+                    cube2.layers.set( 2 ); // display in right eye only
+                    scene.add( cube2 );
                 }
-                xrSession.renderState.layers[0].forceMonoPresentation = force_mono;
+
+                renderer = new THREE.WebGLRenderer();
+                renderer.setPixelRatio( window.devicePixelRatio );
+                renderer.setSize( window.innerWidth, window.innerHeight );
+                renderer.setAnimationLoop( animate );
+                renderer.xr.enabled = true;
+                renderer.xr.setReferenceSpaceType( 'local' );
+
+                await renderer.xr.setSession( session );
+
+                container.appendChild( renderer.domElement );
+
+                //
+
+                window.addEventListener( 'resize', () => {
+                    setTimeout(() => {
+                        onWindowResize();
+                    }, 2000);
+                });
+
+            }
+
+            function onWindowResize() {
+
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+
+                renderer.setSize( window.innerWidth, window.innerHeight );
+
+            }
+
+            function animate() {
+
+                if(true && videoLoaded && meshLeft == null && meshRight == null) {
+                    const texture = new THREE.VideoTexture( video );
+                    texture.colorSpace = THREE.SRGBColorSpace;
+
+                    // left
+
+                    const geometry1 = new THREE.SphereGeometry( 500, 60, 40 );
+                    // invert the geometry on the x-axis so that all of the faces point inward
+                    geometry1.scale( - 1, 1, 1 );
+
+                    const uvs1 = geometry1.attributes.uv.array;
+
+                    for ( let i = 0; i < uvs1.length; i += 2 ) {
+
+                        uvs1[ i ] *= 0.5;
+
+                    }
+
+                    materialLeft = new THREE.MeshBasicMaterial( { map: texture } );
+
+                    meshLeft = new THREE.Mesh( geometry1, materialLeft );
+                    meshLeft.rotation.y = - Math.PI / 2;
+                    meshLeft.layers.set( 1 ); // display in left eye only
+                    scene.add( meshLeft );
+
+                    // right
+
+                    const geometry2 = new THREE.SphereGeometry( 500, 60, 40 );
+                    geometry2.scale( - 1, 1, 1 );
+
+                    const uvs2 = geometry2.attributes.uv.array;
+
+                    for ( let i = 0; i < uvs2.length; i += 2 ) {
+
+                        uvs2[ i ] *= 0.5;
+                        uvs2[ i ] += 0.5;
+
+                    }
+
+                    materialRight = new THREE.MeshBasicMaterial( { map: texture } );
+
+                    meshRight = new THREE.Mesh( geometry2, materialRight );
+                    meshRight.rotation.y = - Math.PI / 2;
+                    meshRight.layers.set( 2 ); // display in right eye only
+                    scene.add( meshRight );
+                }
+
+                renderer.render( scene, camera );
+
+                // if (xrSession.inputSources && xrSession.inputSources.length > 0) {
+                //     for (let source of xrSession.inputSources) {
+                //         if (source.hand) {
+                //             // console.warn("hand");
+                //             if (source.gamepad && source.gamepad.buttons[0]) {
+                //                 nextVideo();
+                //             }
+                //         } else if (source.gamepad) {
+                //             // Toggle Play/Pause on primary button press
+                //             if (buttonReleaseThisFrame(source, source.gamepad, 0)) {
+                //                 nextVideo();
+                //             }
+                //         }
+                //     }
+                // }
+            }
+
+            function nextVideo() {
+                currentPlayIndex = (currentPlayIndex + 1) % list.length; 
+                console.log("play next video: ", list[currentPlayIndex], currentPlayIndex);
+                video.src = list[currentPlayIndex];
+                videoLoaded = false;
+                if (scene) {
+                    scene.remove(meshLeft);
+                    scene.remove(meshRight);
+                    meshLeft = null;
+                    meshRight = null;
+                }
+                video.play();
             }
 
             // Start the XR application.

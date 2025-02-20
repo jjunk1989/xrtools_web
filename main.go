@@ -92,8 +92,31 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "File uploaded successfully: %s", header.Filename)
 }
 
+// 递归遍历目录并收集文件
+func collectFiles(dir string) ([]string, error) {
+	var files []string
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			// 递归调用 collectFiles 函数
+			subFiles, err := collectFiles(dir + "/" + entry.Name())
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, subFiles...)
+		} else {
+			files = append(files, dir+"/"+entry.Name())
+		}
+	}
+	return files, nil
+}
+
 func listVideosHandler(w http.ResponseWriter, r *http.Request) {
-	files, err := os.ReadDir("videos")
+	// 调用辅助函数递归收集文件
+	videoFiles, err := collectFiles("videos")
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -103,13 +126,6 @@ func listVideosHandler(w http.ResponseWriter, r *http.Request) {
 			"list":    nil,
 		})
 		return
-	}
-
-	var videoFiles []string
-	for _, file := range files {
-		if !file.IsDir() {
-			videoFiles = append(videoFiles, file.Name())
-		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
