@@ -28,6 +28,7 @@ XRTools Web 是一个使用 Go 语言编写的 Web 应用程序，支持 WebSock
 - 广播消息给所有连接的客户端
 - 复制消息到剪贴板
 - 上传文件
+- WebXR 360 全景视频播放器(支持visionPro,quest,pico)
 
 ## 技术栈
 
