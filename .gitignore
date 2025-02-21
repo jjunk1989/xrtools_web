@@ -6,3 +6,4 @@ key.pem
 !/uploads/upload
 /videos/*
 !/videos/videos
+/dist/*

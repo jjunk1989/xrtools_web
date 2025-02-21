@@ -27,8 +27,8 @@
         </div>
         <div>
             <!-- 添加两个checkbox -->
-            <input type="checkbox" id="angleCheckbox" checked="true" /> <label for="">设置为 180°</label>
-            <input type="checkbox" id="layoutCheckbox" checked="true" /> <label for=""> 设置为左右布局</label>
+            <input type="checkbox" id="angleCheckbox" checked="true" /> <label for=""> 180° 空间视频</label>
+            <!-- <input type="checkbox" id="layoutCheckbox" checked="true" /> <label for=""> 设置为左右布局</label> -->
         </div>
         <div id="video-list">
         </div>
@@ -356,16 +356,24 @@
 
             function animate() {
 
-                if(true && videoLoaded && meshLeft == null && meshRight == null) {
+                if(videoLoaded && meshLeft == null && meshRight == null) {
+                    const angleCheckbox = document.getElementById('angleCheckbox');
+                    const is180 = angleCheckbox.checked;
+
+                    const phiStart = is180 ? Math.PI / 2 : 0;
+                    const phiLength = is180 ? Math.PI : Math.PI * 2;
+                    const thetaStart = 0;
+                    const thetaLength = Math.PI;
+
                     const texture = new THREE.VideoTexture( video );
                     texture.colorSpace = THREE.SRGBColorSpace;
 
                     // left
 
-                    const geometry1 = new THREE.SphereGeometry( 500, 60, 40 );
+                    const geometry1 = new THREE.SphereGeometry( 500, 60, 40, phiStart, phiLength, thetaStart, thetaLength );
                     // invert the geometry on the x-axis so that all of the faces point inward
                     geometry1.scale( - 1, 1, 1 );
-
+                    
                     const uvs1 = geometry1.attributes.uv.array;
 
                     for ( let i = 0; i < uvs1.length; i += 2 ) {
@@ -373,6 +381,8 @@
                         uvs1[ i ] *= 0.5;
 
                     }
+
+                    console.log(geometry1);
 
                     materialLeft = new THREE.MeshBasicMaterial( { map: texture } );
 
@@ -383,8 +393,9 @@
 
                     // right
 
-                    const geometry2 = new THREE.SphereGeometry( 500, 60, 40 );
+                    const geometry2 = new THREE.SphereGeometry( 500, 60, 40, phiStart, phiLength, thetaStart, thetaLength );
                     geometry2.scale( - 1, 1, 1 );
+                    geometry2.parameters.phiLength = Math.PI / 2;
 
                     const uvs2 = geometry2.attributes.uv.array;
 
