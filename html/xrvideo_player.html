@@ -63,6 +63,8 @@
             let list = [];
             let currentPlayIndex = 0;
             let videoLoaded = false;
+            let pictureLoaded = false;
+            let pictureTexture = null;
             // three render
             let camera = null;
             let scene = null;
@@ -154,6 +156,14 @@
                 onButtonClicked();
             }
 
+            function playPicture(src) {
+                new THREE.TextureLoader().load(src, function(texture) {
+                    pictureLoaded = true;
+                    pictureTexture = texture;
+                    onButtonClicked();
+                });
+            }
+
             // 获取视频文件列表并设置到 select 组件中
             fetch('/api/videos')
                 .then(response => response.json())
@@ -165,16 +175,41 @@
                             if (videoFile == "videos/info.txt") {
                                 return;
                             }
+
+                            let isPicture = false;
+                            if (videoFile.indexOf("jpg") > -1 
+                                || videoFile.indexOf("png") > -1
+                                || videoFile.indexOf("jpeg") > -1
+                                || videoFile.indexOf("xbm") > -1
+                                || videoFile.indexOf("tif") > -1
+                                || videoFile.indexOf("pjp") > -1
+                                || videoFile.indexOf("svgz") > -1
+                                || videoFile.indexOf("ico") > -1
+                                || videoFile.indexOf("tiff") > -1
+                                || videoFile.indexOf("gif") > -1
+                                || videoFile.indexOf("svg") > -1
+                                || videoFile.indexOf("jfif") > -1
+                                || videoFile.indexOf("webp") > -1
+                                || videoFile.indexOf("bmp") > -1
+                                || videoFile.indexOf("pjpeg") > -1
+                                || videoFile.indexOf("avif") > -1
+                            ) {
+                                isPicture = true;
+                            }
+
                             listHtml += `
                                 <div class="row">
                                     <div>
                                         <p class="title">${videoFile}</p>
                                         <!-- <video src="${videoFile}" controls="controls" width="500" height="auto"></video> -->
                                     </div>
-                                    <button type="button" class="btn-enterxr" data-src="${videoFile}" data-index="${index}">EnterXR</button>
+                                    <button type="button" class="btn-enterxr" data-src="${videoFile}" data-isPicture="${isPicture}" data-index="${index}">EnterXR</button>
                                 </div>
                             `;
-                            list.push(videoFile);
+                            list.push({
+                                file: videoFile,
+                                isPicture: isPicture,
+                            });
                         });
                         videoList.innerHTML = listHtml;
                         let buttons = document.getElementsByClassName("btn-enterxr");
@@ -182,8 +217,13 @@
                         for(let i = 0; i < buttons.length; i++) {
                             buttons[i].addEventListener("click", function(e) {
                                 let src = e.target.getAttribute("data-src");
-
-                                playVideo(src);
+                                let isPicture = e.target.getAttribute("data-isPicture");
+                                if (isPicture == "true") {
+                                    // 直接打开图片
+                                    playPicture(src);
+                                } else {
+                                    playVideo(src);
+                                }
                             });
                         }
                     } else {
@@ -268,6 +308,7 @@
                 meshRight = null;
                 video.pause();
                 videoLoaded = false;
+                pictureLoaded = false;
             }
 
             async function initRender(session) {
@@ -356,7 +397,7 @@
 
             function animate() {
 
-                if(videoLoaded && meshLeft == null && meshRight == null) {
+                if((pictureLoaded || videoLoaded) && meshLeft == null && meshRight == null) {
                     const angleCheckbox = document.getElementById('angleCheckbox');
                     const is180 = angleCheckbox.checked;
 
@@ -365,8 +406,13 @@
                     const thetaStart = 0;
                     const thetaLength = Math.PI;
 
-                    const texture = new THREE.VideoTexture( video );
-                    texture.colorSpace = THREE.SRGBColorSpace;
+                    let texture = null;
+                    if (pictureLoaded || pictureTexture != null) {
+                        texture = pictureTexture;
+                    } else {
+                        texture = new THREE.VideoTexture( video );
+                        texture.colorSpace = THREE.SRGBColorSpace;
+                    }
 
                     // left
 
@@ -436,15 +482,33 @@
             function nextVideo() {
                 currentPlayIndex = (currentPlayIndex + 1) % list.length; 
                 console.log("play next video: ", list[currentPlayIndex], currentPlayIndex);
-                video.src = list[currentPlayIndex];
-                videoLoaded = false;
-                if (scene) {
-                    scene.remove(meshLeft);
-                    scene.remove(meshRight);
-                    meshLeft = null;
-                    meshRight = null;
+                let source = list[currentPlayIndex];
+                if (source.isPicture) {
+                    new THREE.TextureLoader().load(source.file, function(texture) {
+                        pictureLoaded = true;
+                        pictureTexture = texture;
+                    });
+                    if (scene) {
+                        scene.remove(meshLeft);
+                        scene.remove(meshRight);
+                        meshLeft = null;
+                        meshRight = null;
+                    }
+                    videoLoaded = false;
+                    pictureLoaded = false;
+                } else {
+                    video.src = source.file;
+                    videoLoaded = false;
+                    pictureLoaded = false;
+                    pictureTexture = null;
+                    if (scene) {
+                        scene.remove(meshLeft);
+                        scene.remove(meshRight);
+                        meshLeft = null;
+                        meshRight = null;
+                    }
+                    video.play();
                 }
-                video.play();
             }
 
             // Start the XR application.
