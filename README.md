@@ -41,7 +41,7 @@ XRTools Web 是一个使用 Go 语言编写的 Web 应用程序，支持 WebSock
 1. 克隆仓库：
 
    ```bash
-   git clone https://github.com/your-username/xrtools_web.git
+   git clone https://github.com/jjunk1989/xrtools_web
    ```
 
 2. 进入项目目录：
