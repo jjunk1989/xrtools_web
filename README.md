@@ -4,6 +4,8 @@ XRTools Web is a web application written in Go that supports WebSocket connectio
 
 It facilitates message synchronization between different devices, such as between Pico/Vision Pro and PC. It's also convenient for Mac and PC communication without needing additional software.
 
+Additionally, the project includes a built-in WebXR 360-degree panoramic video player that supports immersive panoramic video playback on VR devices such as Vision Pro, Quest, and Pico, with support for 180°/360° spatial video formats and stereoscopic video modes.
+
 * Run server on PC
 
 ![](./doc/serve.png)
@@ -64,11 +66,32 @@ It facilitates message synchronization between different devices, such as betwee
 
 ## Usage
 
+### Message Synchronization
+
 1. Open your browser and visit https://localhost:8443.
 
 2. Enter a message in the input field and click the "Send" button to send the message.
 
 3. Click the "Copy" button to copy the message to clipboard.
+
+### Panoramic Video Player
+
+1. Visit https://localhost:8443/xrvideo_player.html
+
+2. Place your 360-degree panoramic video files in the `uploads/` directory
+
+3. Select the video you want to play from the player page
+
+4. Features:
+   - Toggle between 180°/360° spatial video modes
+   - Support for monoscopic and stereoscopic video formats
+   - Enter immersive VR mode on VR devices (Vision Pro, Quest, Pico)
+   - Use mouse or touch to drag and rotate the view
+
+5. VR Mode:
+   - Open the player in a WebXR-compatible VR device browser
+   - Click the "Enter VR" button to enter immersive experience
+   - Watch videos in 360 degrees within the VR environment
 
 ## Command Line Arguments
 
